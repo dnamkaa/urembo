@@ -2165,6 +2165,18 @@ def seed():
     print("Sample data loaded")
 
 
+
+# ==================== AUTO INIT ON DEPLOY (Render/Gunicorn) ====================
+
+def ensure_db_ready():
+    """Create tables (and seed demo data if empty) when app starts on Render."""
+    with app.app_context():
+        db.create_all()
+        # Optional: seed demo data only if no products exist
+        if Product.query.count() == 0:
+            seed_sample_data()
+
+ensure_db_ready()
 # ==================== MAIN ====================
 
 if __name__ == '__main__':
