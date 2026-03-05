@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Smart Retail System{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Dashboard</h1>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-label">Total Products</div>
+            <div class="stat-value" id="total-products">{{ total_products }}</div>
+            <small class="text-muted">Active items</small>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-label">Categories</div>
+            <div class="stat-value" id="total-categories">{{ total_categories }}</div>
+            <small class="text-muted">Product groups</small>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-label">Total Value (Cost)</div>
+            <div class="stat-value" id="total-cost" style="font-size: 1.8rem;">TZS --</div>
+            <small class="text-muted">Inventory cost</small>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-label">Avg Margin</div>
+            <div class="stat-value" id="avg-margin" style="font-size: 2rem;">--%</div>
+            <small class="text-muted">Average profit</small>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Quick Actions</h5>
+                <button class="btn btn-primary" onclick="location.href='/products/new'">
+                    <i class="fas fa-plus me-2"></i>Add New Product
+                </button>
+                <button class="btn btn-outline-primary" onclick="loadStats()">
+                    <i class="fas fa-sync me-2"></i>Refresh Statistics
+                </button>
+                <button class="btn btn-outline-primary" onclick="window.open('/api/v1/products')">
+                    <i class="fas fa-code me-2"></i>View API
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Low Stock Alerts -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Low Stock Alerts
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="low-stock-list">
+                    <p class="text-muted">Checking inventory levels...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Featured Products -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Recent Products</h5>
+            </div>
+            <div class="card-body">
+                <div id="products-list">Loading...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function loadStats() {
+        fetch('/api/v1/products/stats')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('total-cost').textContent = 
+                    'TZS ' + data.data.total_cost_value_tzs.toLocaleString();
+                document.getElementById('avg-margin').textContent = 
+                    data.data.average_margin_percent.toFixed(1) + '%';
+            });
+    }
+
+    function loadLowStockAlerts() {
+        fetch('/api/v1/products/low-stock')
+            .then(r => r.json())
+            .then(data => {
+                let html = '';
+                if (!data.data || data.data.length === 0) {
+                    html = '<p class="text-success"><i class="fas fa-check-circle me-2"></i>All products are well stocked!</p>';
+                } else {
+                    html = '<div class="table-responsive"><table class="table table-sm">' +
+                        '<thead><tr><th>SKU</th><th>Product</th><th>Current Stock</th><th>Reorder Level</th><th>Status</th><th>Action</th></tr></thead><tbody>';
+                    
+                    data.data.forEach(p => {
+                        const stockPercent = (p.quantity_in_stock / p.reorder_level * 100).toFixed(0);
+                        let statusBadge = '';
+                        if (p.quantity_in_stock < p.reorder_level) {
+                            statusBadge = '<span class="badge bg-danger">URGENT</span>';
+                        } else if (p.quantity_in_stock < (p.reorder_level * 1.5)) {
+                            statusBadge = '<span class="badge bg-warning">MEDIUM</span>';
+                        }
+                        
+                        html += `<tr>
+                            <td><span class="badge-sku">${p.sku}</span></td>
+                            <td><strong>${p.name}</strong></td>
+                            <td><strong class="text-danger">${p.quantity_in_stock}</strong> units</td>
+                            <td>${p.reorder_level} units</td>
+                            <td>${statusBadge}</td>
+                            <td><a href="/products/${p.product_id}" class="btn btn-sm btn-primary">View & Update</a></td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table></div>';
+                }
+                document.getElementById('low-stock-list').innerHTML = html;
+            });
+    }
+    
+    function loadProducts() {
+        fetch('/api/v1/products?limit=10')
+            .then(r => r.json())
+            .then(data => {
+                let html = '<div class="table-responsive"><table class="table">' +
+                    '<thead><tr><th>SKU</th><th>Name</th><th>Category</th>' +
+                    '<th>Cost</th><th>Price</th><th>Stock</th><th>Actions</th></tr></thead><tbody>';
+                
+                data.data.forEach(p => {
+                    let stockBadge = '';
+                    if (p.quantity_in_stock < p.reorder_level) {
+                        stockBadge = `<span class="badge bg-danger">${p.quantity_in_stock}</span>`;
+                    } else if (p.quantity_in_stock < (p.reorder_level * 1.5)) {
+                        stockBadge = `<span class="badge bg-warning">${p.quantity_in_stock}</span>`;
+                    } else {
+                        stockBadge = `<span class="badge bg-success">${p.quantity_in_stock}</span>`;
+                    }
+                    
+                    html += `<tr>
+                        <td><span class="badge-sku">${p.sku}</span></td>
+                        <td><strong>${p.name}</strong></td>
+                        <td><span class="badge-category">${p.category}</span></td>
+                        <td class="price-cost" data-price="${p.cost_price_tzs}">TZS --</td>
+                        <td class="price-selling" data-price="${p.selling_price_tzs}">TZS --</td>
+                        <td>${stockBadge}</td>
+                        <td>
+                            <a href="/products/${p.product_id}" class="btn btn-sm btn-outline-primary">View</a>
+                            <a href="/products/${p.product_id}/edit" class="btn btn-sm btn-outline-secondary">Edit</a>
+                        </td>
+                    </tr>`;
+                });
+                
+                html += '</tbody></table></div>';
+                document.getElementById('products-list').innerHTML = html;
+                
+                // Format prices
+                document.querySelectorAll('[data-price]').forEach(el => {
+                    const price = parseFloat(el.dataset.price);
+                    el.textContent = 'TZS ' + Math.round(price).toLocaleString();
+                });
+            });
+    }
+    
+    // Load on page load
+    loadStats();
+    loadLowStockAlerts();
+    loadProducts();
+</script>
+{% endblock %}

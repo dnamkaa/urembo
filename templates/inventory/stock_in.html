@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}Stock In - Smart Retail System{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+    <div>
+        <a href="{{ url_for('inventory_overview') }}" class="btn btn-sm btn-outline-secondary mb-2">
+            <i class="fas fa-arrow-left me-1"></i>Back to Inventory
+        </a>
+        <h1 class="page-title">
+            <i class="fas fa-arrow-down me-2"></i>Record Stock In
+        </h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">Goods Received from Supplier</h5>
+            </div>
+            <div class="card-body">
+                <form id="stock-in-form">
+                    <!-- Product Selection -->
+                    <div class="mb-3">
+                        <label for="sku" class="form-label">Product <span class="text-danger">*</span></label>
+                        <select class="form-control" id="sku" name="sku" required>
+                            <option value="">-- Select Product --</option>
+                        </select>
+                        <div id="product-info" class="mt-2 p-2 bg-light rounded d-none">
+                            <small>
+                                <strong>Current Stock:</strong> <span id="current-stock">0</span> units |
+                                <strong>Reorder Level:</strong> <span id="reorder-level">0</span>
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Quantity -->
+                    <div class="mb-3">
+                        <label for="quantity" class="form-label">Quantity Received <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="quantity" name="quantity" 
+                                   min="1" required placeholder="e.g., 50">
+                            <span class="input-group-text">units</span>
+                        </div>
+                    </div>
+
+                    <!-- Supplier Reference -->
+                    <div class="mb-3">
+                        <label for="reference" class="form-label">Supplier Invoice / Reference</label>
+                        <input type="text" class="form-control" id="reference" name="reference" 
+                               placeholder="e.g., SUP-2026-001234">
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Notes</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="3" 
+                                  placeholder="Any additional notes..."></textarea>
+                    </div>
+
+                    <!-- User -->
+                    <div class="mb-3">
+                        <label for="created_by" class="form-label">Received By</label>
+                        <input type="text" class="form-control" id="created_by" name="created_by" 
+                               placeholder="Your name">
+                    </div>
+
+                    <!-- Submit -->
+                    <button type="submit" class="btn btn-success btn-lg w-100">
+                        <i class="fas fa-check me-2"></i>Record Stock In
+                    </button>
+                </form>
+
+                <!-- Success Alert -->
+                <div id="success-alert" class="alert alert-success mt-3 d-none">
+                    <i class="fas fa-check-circle me-2"></i>
+                    <strong>Success!</strong> <span id="success-message"></span>
+                </div>
+
+                <!-- Error Alert -->
+                <div id="error-alert" class="alert alert-danger mt-3 d-none">
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    <strong>Error!</strong> <span id="error-message"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Side Panel -->
+    <div class="col-lg-4">
+        <div class="card bg-light">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-info-circle me-2"></i>Instructions
+                </h5>
+            </div>
+            <div class="card-body">
+                <h6>Step 1: Select Product</h6>
+                <p class="small text-muted">Choose the product you received from the dropdown.</p>
+
+                <h6 class="mt-3">Step 2: Enter Quantity</h6>
+                <p class="small text-muted">How many units did you receive?</p>
+
+                <h6 class="mt-3">Step 3: Reference Number</h6>
+                <p class="small text-muted">Supplier invoice or PO number for audit trail.</p>
+
+                <h6 class="mt-3">Step 4: Submit</h6>
+                <p class="small text-muted">Click "Record Stock In" to update inventory.</p>
+
+                <div class="alert alert-info mt-4">
+                    <i class="fas fa-lightbulb me-2"></i>
+                    <strong>Tip:</strong> All stock changes are automatically tracked and cannot be reversed. 
+                    If you made a mistake, use "Adjust Stock" to correct it.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Load products for selection
+    function loadProducts() {
+        fetch('/api/v1/products?limit=500')
+            .then(r => r.json())
+            .then(data => {
+                const select = document.getElementById('sku');
+                data.data.forEach(product => {
+                    const option = document.createElement('option');
+                    option.value = product.sku;
+                    option.textContent = `${product.sku} - ${product.name}`;
+                    select.appendChild(option);
+                });
+            });
+    }
+
+    // Show product info when selected
+    document.getElementById('sku').addEventListener('change', function() {
+        const sku = this.value;
+        if (sku) {
+            fetch(`/api/v1/inventory/stock/${sku}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        const info = data.data;
+                        document.getElementById('current-stock').textContent = info.current_stock;
+                        document.getElementById('reorder-level').textContent = info.reorder_level;
+                        document.getElementById('product-info').classList.remove('d-none');
+                    }
+                });
+        }
+    });
+
+    // Submit form
+    document.getElementById('stock-in-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const data = {
+            sku: document.getElementById('sku').value,
+            quantity: parseInt(document.getElementById('quantity').value),
+            reference: document.getElementById('reference').value,
+            notes: document.getElementById('notes').value,
+            created_by: document.getElementById('created_by').value
+        };
+
+        fetch('/api/v1/inventory/stock-in', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'success') {
+                document.getElementById('success-message').textContent = data.message;
+                document.getElementById('success-alert').classList.remove('d-none');
+                document.getElementById('error-alert').classList.add('d-none');
+                document.getElementById('stock-in-form').reset();
+                
+                setTimeout(() => {
+                    window.location.href = '/inventory/overview';
+                }, 1500);
+            } else {
+                document.getElementById('error-message').textContent = data.message;
+                document.getElementById('error-alert').classList.remove('d-none');
+                document.getElementById('success-alert').classList.add('d-none');
+            }
+        });
+    });
+
+    loadProducts();
+</script>
+{% endblock %}

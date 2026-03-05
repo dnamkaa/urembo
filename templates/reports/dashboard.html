@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+
+{% block title %}Reports Dashboard - Smart Retail System{% endblock %}
+
+{% block extra_css %}
+<style>
+    .dashboard-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+    }
+    
+    .dashboard-header h1 {
+        font-size: 2rem;
+        margin: 0;
+    }
+    
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .kpi-card {
+        background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+        transition: all 0.3s;
+    }
+    
+    .kpi-card:hover {
+        box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+        border-color: #2563eb;
+        transform: translateY(-4px);
+    }
+    
+    .kpi-label {
+        font-size: 0.9rem;
+        color: #64748b;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.5rem;
+    }
+    
+    .kpi-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #1f2937;
+        margin-bottom: 0.5rem;
+    }
+    
+    .kpi-subtext {
+        font-size: 0.85rem;
+        color: #94a3b8;
+    }
+    
+    .kpi-icon {
+        float: right;
+        font-size: 2.5rem;
+        opacity: 0.1;
+    }
+    
+    .alert-card {
+        background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+        border: 2px solid #fecaca;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .alert-card.warning {
+        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        border-color: #fcd34d;
+    }
+    
+    .alert-card.success {
+        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+        border-color: #86efac;
+    }
+    
+    .alert-title {
+        font-weight: 700;
+        font-size: 1.1rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .alert-card.warning .alert-title {
+        color: #92400e;
+    }
+    
+    .alert-card.success .alert-title {
+        color: #166534;
+    }
+    
+    .loading {
+        text-align: center;
+        padding: 3rem;
+        color: #94a3b8;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="dashboard-header">
+        <h1 class="page-title">
+            <i class="fas fa-tachometer-alt me-2"></i>Reports Dashboard
+        </h1>
+        <button class="btn btn-primary" onclick="refreshDashboard()">
+            <i class="fas fa-sync-alt me-2"></i>Refresh
+        </button>
+    </div>
+</div>
+
+<div id="alerts-container"></div>
+
+<div id="dashboard-content" class="loading">
+    <i class="fas fa-spinner fa-spin me-2"></i> Loading dashboard data...
+</div>
+
+<script>
+    function formatTZS(amount) {
+        return new Intl.NumberFormat('en-TZ', {
+            style: 'currency',
+            currency: 'TZS',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        }).format(amount).replace('TZS', '').trim() + ' TZS';
+    }
+    
+    function showAlert(message, type = 'error') {
+        const container = document.getElementById('alerts-container');
+        const alertId = 'alert-' + Date.now();
+        const html = `
+            <div id="${alertId}" class="alert-card ${type}">
+                <strong>${type === 'error' ? '❌' : '✅'}</strong> ${message}
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', html);
+        setTimeout(() => {
+            const el = document.getElementById(alertId);
+            if (el) el.remove();
+        }, 5000);
+    }
+    
+    function renderDashboard(data) {
+        const today = data.today;
+        const week = data.week;
+        const month = data.month;
+        const inventory = data.inventory;
+        
+        let html = `
+            <div class="kpi-grid">
+                <!-- Today Section -->
+                <div class="kpi-card">
+                    <div class="kpi-icon">📊</div>
+                    <div class="kpi-label">Today's Sales</div>
+                    <div class="kpi-value">${formatTZS(today.total_sales_tzs)}</div>
+                    <div class="kpi-subtext">${today.transactions} transactions</div>
+                </div>
+                
+                <div class="kpi-card">
+                    <div class="kpi-icon">🛒</div>
+                    <div class="kpi-label">Average Basket</div>
+                    <div class="kpi-value">${formatTZS(today.avg_basket_tzs)}</div>
+                    <div class="kpi-subtext">Per transaction today</div>
+                </div>
+                
+                <!-- Weekly Section -->
+                <div class="kpi-card">
+                    <div class="kpi-icon">📈</div>
+                    <div class="kpi-label">This Week's Sales</div>
+                    <div class="kpi-value">${formatTZS(week.total_sales_tzs)}</div>
+                    <div class="kpi-subtext">${week.transactions} transactions</div>
+                </div>
+                
+                <!-- Monthly Section -->
+                <div class="kpi-card">
+                    <div class="kpi-icon">📅</div>
+                    <div class="kpi-label">This Month's Sales</div>
+                    <div class="kpi-value">${formatTZS(month.total_sales_tzs)}</div>
+                    <div class="kpi-subtext">${month.transactions} transactions</div>
+                </div>
+                
+                <!-- Inventory Health -->
+                <div class="kpi-card">
+                    <div class="kpi-icon">📦</div>
+                    <div class="kpi-label">Out of Stock</div>
+                    <div class="kpi-value" style="color: #dc2626;">${inventory.out_of_stock_count}</div>
+                    <div class="kpi-subtext">Items need restocking</div>
+                </div>
+                
+                <div class="kpi-card">
+                    <div class="kpi-icon">⚠️</div>
+                    <div class="kpi-label">Low Stock Items</div>
+                    <div class="kpi-value" style="color: #ea580c;">${inventory.low_stock_count}</div>
+                    <div class="kpi-subtext">Below reorder level</div>
+                </div>
+            </div>
+        `;
+        
+        // Add alerts if needed
+        if (inventory.out_of_stock_count > 0) {
+            html += `
+                <div class="alert-card">
+                    <div class="alert-title">❌ ${inventory.out_of_stock_count} Items Out of Stock</div>
+                    <p>Urgent: These items need immediate restocking. <a href="/reports/inventory-health">View Details</a></p>
+                </div>
+            `;
+        }
+        
+        if (inventory.low_stock_count > 0) {
+            html += `
+                <div class="alert-card warning">
+                    <div class="alert-title">⚠️ ${inventory.low_stock_count} Items Low in Stock</div>
+                    <p>Consider reordering these items soon. <a href="/reports/inventory-health">View Details</a></p>
+                </div>
+            `;
+        }
+        
+        if (inventory.low_stock_count === 0 && inventory.out_of_stock_count === 0) {
+            html += `
+                <div class="alert-card success">
+                    <div class="alert-title">✅ All items in stock</div>
+                    <p>Inventory levels are healthy. Great job!</p>
+                </div>
+            `;
+        }
+        
+        document.getElementById('dashboard-content').innerHTML = html;
+    }
+    
+    function refreshDashboard() {
+        // Get button if called from click event
+        let btn = null;
+        if (event && event.target) {
+            btn = event.target.closest('button');
+        }
+        
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Refreshing...';
+        }
+        
+        fetch('/api/reports/dashboard')
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    renderDashboard(data);
+                } else {
+                    showAlert('Failed to load dashboard: ' + data.message);
+                }
+            })
+            .catch(err => {
+                showAlert('Network error: ' + err.message);
+            })
+            .finally(() => {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Refresh';
+                }
+            });
+    }
+    
+    // Load dashboard data on page load
+    document.addEventListener('DOMContentLoaded', refreshDashboard);
+</script>
+{% endblock %}

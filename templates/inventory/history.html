@@ -1,0 +1,361 @@
+{% extends "base.html" %}
+
+{% block title %}Stock Movement History - Smart Retail System{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+    <div>
+        <a href="{{ url_for('inventory_overview') }}" class="btn btn-sm btn-outline-secondary mb-2">
+            <i class="fas fa-arrow-left me-1"></i>Back to Inventory
+        </a>
+        <h1 class="page-title">
+            <i class="fas fa-history me-2"></i>Stock Movement History
+        </h1>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <form class="row g-2">
+                    <!-- Product Selection -->
+                    <div class="col-md-6">
+                        <label class="form-label">Product</label>
+                        <select class="form-control" id="sku" name="sku">
+                            <option value="">-- All Products --</option>
+                        </select>
+                    </div>
+
+                    <!-- Movement Type Filter -->
+                    <div class="col-md-6">
+                        <label class="form-label">Movement Type</label>
+                        <select class="form-control" id="movement-type" name="movement_type">
+                            <option value="">-- All Types --</option>
+                            <option value="STOCK_IN">Stock In (In)</option>
+                            <option value="SALE">Sale (Out)</option>
+                            <option value="ADJUSTMENT">Adjustment</option>
+                            <option value="RETURN">Return (In)</option>
+                            <option value="TRANSFER_OUT">Transfer Out</option>
+                        </select>
+                    </div>
+
+                    <div class="col-12">
+                        <button type="button" class="btn btn-primary btn-sm" onclick="filterHistory()">
+                            <i class="fas fa-filter me-1"></i>Filter
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="resetFilters()">
+                            <i class="fas fa-times me-1"></i>Reset
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Card -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-body">
+                <div id="history-summary">
+                    <small class="text-muted">Loading summary...</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- History Table -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Movement Log</h5>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="exportTableToCSV()">
+            <i class="fas fa-download me-1"></i>Export CSV
+        </button>
+    </div>
+    <div class="card-body">
+        <div id="loading" class="alert alert-info">
+            <i class="fas fa-spinner fa-spin me-2"></i>Loading history...
+        </div>
+
+        <div id="table-container" class="d-none">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Date & Time</th>
+                            <th>SKU</th>
+                            <th>Product Name</th>
+                            <th>Type</th>
+                            <th>Quantity</th>
+                            <th>Reference</th>
+                            <th>User</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-table">
+                    </tbody>
+                </table>
+            </div>
+            <nav aria-label="History pagination" id="pagination" class="d-none">
+                <ul class="pagination justify-content-center">
+                    <li class="page-item"><button class="page-link" onclick="previousPage()">Previous</button></li>
+                    <li class="page-item active"><span class="page-link" id="page-info">Page 1</span></li>
+                    <li class="page-item"><button class="page-link" onclick="nextPage()">Next</button></li>
+                </ul>
+            </nav>
+        </div>
+
+        <div id="no-data" class="alert alert-info d-none">
+            <i class="fas fa-information-circle me-2"></i>No movements found matching your filters.
+        </div>
+    </div>
+</div>
+
+<script>
+    let allMovements = [];
+    let filteredMovements = [];
+    let currentPage = 1;
+    const itemsPerPage = 30;
+
+    // Load products for filter
+    function loadProducts() {
+        fetch('/api/v1/products?limit=500')
+            .then(r => r.json())
+            .then(data => {
+                const select = document.getElementById('sku');
+                const urlParams = new URLSearchParams(window.location.search);
+                const selectedSku = urlParams.get('sku');
+
+                data.data.forEach(product => {
+                    const option = document.createElement('option');
+                    option.value = product.sku;
+                    option.textContent = `${product.sku} - ${product.name}`;
+                    if (selectedSku && product.sku === selectedSku) {
+                        option.selected = true;
+                    }
+                    select.appendChild(option);
+                });
+
+                if (selectedSku) {
+                    loadHistory(selectedSku);
+                } else {
+                    loadAllHistory();
+                }
+            });
+    }
+
+    // Load all movements
+    function loadAllHistory() {
+        fetch('/api/v1/inventory/movements/all')
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    allMovements = data.data;
+                    filteredMovements = [...allMovements];
+                    renderTable();
+                    updateSummary();
+                } else {
+                    showNoData();
+                }
+            })
+            .catch(() => showNoData());
+    }
+
+    // Load movements for specific SKU
+    function loadHistory(sku) {
+        fetch(`/api/v1/inventory/movements/${sku}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    allMovements = data.data;
+                    filteredMovements = [...allMovements];
+                    renderTable();
+                    updateSummary();
+                } else {
+                    showNoData();
+                }
+            })
+            .catch(() => showNoData());
+    }
+
+    // Filter by criteria
+    function filterHistory() {
+        const sku = document.getElementById('sku').value;
+        const moveType = document.getElementById('movement-type').value;
+
+        if (!sku) {
+            loadAllHistory();
+        } else {
+            loadHistory(sku);
+        }
+
+        if (moveType) {
+            filteredMovements = allMovements.filter(m => m.movement_type === moveType);
+        } else {
+            filteredMovements = [...allMovements];
+        }
+
+        currentPage = 1;
+        renderTable();
+        updateSummary();
+    }
+
+    // Reset filters
+    function resetFilters() {
+        document.getElementById('sku').value = '';
+        document.getElementById('movement-type').value = '';
+        currentPage = 1;
+        loadAllHistory();
+    }
+
+    // Render table
+    function renderTable() {
+        const tbody = document.getElementById('history-table');
+        tbody.innerHTML = '';
+
+        if (filteredMovements.length === 0) {
+            showNoData();
+            return;
+        }
+
+        document.getElementById('table-container').classList.remove('d-none');
+        document.getElementById('loading').classList.add('d-none');
+        document.getElementById('no-data').classList.add('d-none');
+
+        const start = (currentPage - 1) * itemsPerPage;
+        const end = start + itemsPerPage;
+        const pageMovements = filteredMovements.slice(start, end);
+
+        pageMovements.forEach(movement => {
+            const row = document.createElement('tr');
+            
+            let typeIcon = '📦';
+            let typeColor = '';
+            if (movement.movement_type === 'STOCK_IN') {
+                typeIcon = '📥';
+                typeColor = 'text-success';
+            } else if (movement.movement_type === 'SALE') {
+                typeIcon = '🛒';
+                typeColor = 'text-danger';
+            } else if (movement.movement_type === 'ADJUSTMENT') {
+                typeIcon = '🔧';
+                typeColor = 'text-warning';
+            } else if (movement.movement_type === 'RETURN') {
+                typeIcon = '↩️';
+                typeColor = 'text-info';
+            }
+
+            const qtyDisplay = movement.quantity > 0 ? `+${movement.quantity}` : `${movement.quantity}`;
+            const qtyColor = movement.quantity > 0 ? 'text-success' : 'text-danger';
+
+            row.innerHTML = `
+                <td>${formatDate(movement.created_at)}</td>
+                <td><strong>${movement.sku}</strong></td>
+                <td>${movement.product_name || 'N/A'}</td>
+                <td><span class="${typeColor}">${typeIcon} ${movement.movement_type}</span></td>
+                <td><span class="${qtyColor} fw-bold">${qtyDisplay}</span></td>
+                <td><small>${movement.reference || '—'}</small></td>
+                <td>${movement.created_by || 'System'}</td>
+                <td><small class="text-muted">${movement.notes || '—'}</small></td>
+            `;
+            tbody.appendChild(row);
+        });
+
+        showPagination();
+    }
+
+    // Update summary
+    function updateSummary() {
+        const summary = document.getElementById('history-summary');
+        
+        const inCount = filteredMovements.filter(m => m.movement_type === 'STOCK_IN').length;
+        const outCount = filteredMovements.filter(m => m.movement_type === 'SALE').length;
+        const adjCount = filteredMovements.filter(m => m.movement_type === 'ADJUSTMENT').length;
+
+        summary.innerHTML = `
+            <div class="mb-2">
+                <small class="d-block"><strong>Total Movements:</strong> ${filteredMovements.length}</small>
+                <small class="d-block"><strong>Stock In:</strong> ${inCount}</small>
+                <small class="d-block"><strong>Sales:</strong> ${outCount}</small>
+                <small class="d-block"><strong>Adjustments:</strong> ${adjCount}</small>
+            </div>
+        `;
+    }
+
+    // Pagination
+    function showPagination() {
+        const totalPages = Math.ceil(filteredMovements.length / itemsPerPage);
+        if (totalPages > 1) {
+            document.getElementById('pagination').classList.remove('d-none');
+            document.getElementById('page-info').textContent = `Page ${currentPage} of ${totalPages}`;
+        }
+    }
+
+    function nextPage() {
+        const totalPages = Math.ceil(filteredMovements.length / itemsPerPage);
+        if (currentPage < totalPages) {
+            currentPage++;
+            renderTable();
+            window.scrollTo(0, 0);
+        }
+    }
+
+    function previousPage() {
+        if (currentPage > 1) {
+            currentPage--;
+            renderTable();
+            window.scrollTo(0, 0);
+        }
+    }
+
+    // Show no data
+    function showNoData() {
+        document.getElementById('table-container').classList.add('d-none');
+        document.getElementById('loading').classList.add('d-none');
+        document.getElementById('no-data').classList.remove('d-none');
+    }
+
+    // Format date
+    function formatDate(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+
+    // Export to CSV
+    function exportTableToCSV() {
+        let csv = 'Date,SKU,Product,Type,Quantity,Reference,User,Notes\n';
+        
+        filteredMovements.forEach(movement => {
+            const qty = movement.quantity;
+            const row = [
+                movement.created_at,
+                movement.sku,
+                movement.product_name || 'N/A',
+                movement.movement_type,
+                qty,
+                movement.reference || '',
+                movement.created_by || 'System',
+                (movement.notes || '').replace(/"/g, '""')
+            ];
+            csv += '"' + row.join('","') + '"\n';
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `inventory-history-${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+    }
+
+    // Load on page load
+    loadProducts();
+</script>
+{% endblock %}

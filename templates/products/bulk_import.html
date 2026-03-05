@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+
+{% block title %}Bulk Import Products{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="mb-2">
+                <i class="fas fa-upload"></i> Bulk Import Products
+            </h1>
+            <p class="text-muted">Upload products from CSV or Excel file</p>
+        </div>
+    </div>
+
+    <!-- Alert Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'danger' else 'success' if category == 'success' else 'warning' }} alert-dismissible fade show" role="alert">
+                    <strong>
+                        {% if category == 'danger' %}
+                            <i class="fas fa-exclamation-circle"></i> Error
+                        {% elif category == 'success' %}
+                            <i class="fas fa-check-circle"></i> Success
+                        {% else %}
+                            <i class="fas fa-info-circle"></i> Info
+                        {% endif %}
+                    </strong>
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="row">
+        <!-- Upload Section -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-upload"></i> Upload File
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data">
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Select File</label>
+                            <div class="input-group">
+                                <input 
+                                    type="file" 
+                                    name="file" 
+                                    class="form-control" 
+                                    accept=".csv,.xlsx,.xls"
+                                    required
+                                    id="fileInput"
+                                >
+                                <button class="btn btn-outline-secondary" type="button" id="clearBtn">Clear</button>
+                            </div>
+                            <small class="text-muted d-block mt-2">
+                                <i class="fas fa-info-circle"></i> Supported formats: CSV, XLSX, XLS (Max 16MB)
+                            </small>
+                        </div>
+
+                        <div id="fileInfo" style="display: none;" class="alert alert-info mb-4">
+                            <strong>File Selected:</strong> <span id="fileName"></span>
+                        </div>
+
+                        <div class="d-grid gap-2 d-sm-flex">
+                            <button type="submit" class="btn btn-success btn-lg flex-grow-1">
+                                <i class="fas fa-cloud-upload-alt"></i> Import Products
+                            </button>
+                            <a href="{{ url_for('products_list') }}" class="btn btn-secondary btn-lg flex-grow-1">
+                                <i class="fas fa-arrow-left"></i> Back
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Guide Section -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-question-circle"></i> How to Use
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <ol class="small">
+                        <li class="mb-2">
+                            <strong>Download Template</strong><br>
+                            <a href="{{ url_for('download_template') }}" class="btn btn-sm btn-outline-info">
+                                <i class="fas fa-download"></i> Download CSV Template
+                            </a>
+                        </li>
+                        <li class="mb-2">
+                            <strong>Fill with Data</strong><br>
+                            Open in Excel or Google Sheets and add your products
+                        </li>
+                        <li class="mb-2">
+                            <strong>Save & Upload</strong><br>
+                            Save as CSV or XLSX and upload here
+                        </li>
+                        <li>
+                            <strong>Done!</strong><br>
+                            Products imported with sample images automatically
+                        </li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- Requirements Card -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="fas fa-clipboard-checklist"></i> Required Fields
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <span class="badge bg-danger">Required</span> <strong>name</strong>
+                        <small class="d-block text-muted">Product name</small>
+                    </div>
+                    <div class="mb-3">
+                        <span class="badge bg-danger">Required</span> <strong>category</strong>
+                        <small class="d-block text-muted">Product category</small>
+                    </div>
+                    <div class="mb-3">
+                        <span class="badge bg-danger">Required</span> <strong>cost_price_tzs</strong>
+                        <small class="d-block text-muted">Cost in TZS (numbers only)</small>
+                    </div>
+                    <div class="mb-3">
+                        <span class="badge bg-danger">Required</span> <strong>selling_price_tzs</strong>
+                        <small class="d-block text-muted">Selling price in TZS</small>
+                    </div>
+                    <div class="mb-3">
+                        <span class="badge bg-success">Optional</span> <strong>sku</strong>
+                        <small class="d-block text-muted">Auto-generated if empty</small>
+                    </div>
+                    <div class="mb-3">
+                        <span class="badge bg-success">Optional</span> <strong>reorder_level</strong>
+                        <small class="d-block text-muted">Min stock (default: 10)</small>
+                    </div>
+                    <div class="mb-3">
+                        <span class="badge bg-success">Optional</span> <strong>description</strong>
+                        <small class="d-block text-muted">Product details</small>
+                    </div>
+                    <div>
+                        <span class="badge bg-success">Optional</span> <strong>image_url</strong>
+                        <small class="d-block text-muted">Image link (auto if empty)</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Examples -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-sitemap"></i> Category Examples
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <h6>Personal Care</h6>
+                            <small class="text-muted">
+                                Soap, shampoo, toothpaste, lotion, deodorant
+                            </small>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <h6>Grains</h6>
+                            <small class="text-muted">
+                                Rice, flour, maize, beans, lentils
+                            </small>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <h6>Cooking</h6>
+                            <small class="text-muted">
+                                Oil, salt, spices, seasonings
+                            </small>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <h6>Beverages</h6>
+                            <small class="text-muted">
+                                Soda, juice, water, tea, coffee
+                            </small>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <h6>Dairy</h6>
+                            <small class="text-muted">
+                                Milk, cheese, yogurt, butter
+                            </small>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <h6>Spices</h6>
+                            <small class="text-muted">
+                                Pepper, garlic, cinnamon, turmeric
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Features -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-star"></i> Features
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex">
+                                <div class="flex-shrink-0">
+                                    <i class="fas fa-image text-success fa-lg"></i>
+                                </div>
+                                <div class="flex-grow-1 ms-3">
+                                    <h6>Automatic Sample Images</h6>
+                                    <small class="text-muted">
+                                        Products get sample images automatically sorted by category
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex">
+                                <div class="flex-shrink-0">
+                                    <i class="fas fa-key text-primary fa-lg"></i>
+                                </div>
+                                <div class="flex-grow-1 ms-3">
+                                    <h6>Auto SKU Generation</h6>
+                                    <small class="text-muted">
+                                        If you don't provide SKU, unique codes are generated automatically
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex">
+                                <div class="flex-shrink-0">
+                                    <i class="fas fa-check-double text-success fa-lg"></i>
+                                </div>
+                                <div class="flex-grow-1 ms-3">
+                                    <h6>Validation</h6>
+                                    <small class="text-muted">
+                                        All required fields are validated before importing
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex">
+                                <div class="flex-shrink-0">
+                                    <i class="fas fa-barcode text-info fa-lg"></i>
+                                </div>
+                                <div class="flex-grow-1 ms-3">
+                                    <h6>Duplicate Detection</h6>
+                                    <small class="text-muted">
+                                        Existing SKUs are not duplicated, you get a detailed report
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- File Selection Script -->
+<script>
+document.getElementById('fileInput').addEventListener('change', function() {
+    if (this.files && this.files[0]) {
+        document.getElementById('fileName').textContent = this.files[0].name;
+        document.getElementById('fileInfo').style.display = 'block';
+    }
+});
+
+document.getElementById('clearBtn').addEventListener('click', function() {
+    document.getElementById('fileInput').value = '';
+    document.getElementById('fileInfo').style.display = 'none';
+});
+</script>
+{% endblock %}

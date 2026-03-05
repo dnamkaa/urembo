@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory Overview - Smart Retail System{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+    <h1 class="page-title">
+        <i class="fas fa-warehouse me-2"></i>Inventory Overview
+    </h1>
+    <div class="btn-group">
+        <a href="{{ url_for('inventory_stock_in') }}" class="btn btn-success">
+            <i class="fas fa-arrow-down me-1"></i>Stock In
+        </a>
+        <a href="{{ url_for('inventory_adjust') }}" class="btn btn-warning">
+            <i class="fas fa-tools me-1"></i>Adjust Stock
+        </a>
+    </div>
+</div>
+
+<!-- Quick Stats -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-label">Total SKUs</div>
+            <div class="stat-value" id="total-skus">--</div>
+            <small class="text-muted">Tracked products</small>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-label">Low Stock Items</div>
+            <div class="stat-value text-danger" id="low-stock-count">--</div>
+            <small class="text-muted">Below reorder level</small>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-label">Total Inventory Value</div>
+            <div class="stat-value" id="total-value" style="font-size: 1.8rem;">TZS --</div>
+            <small class="text-muted">Cost value</small>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-label">Total Movements</div>
+            <div class="stat-value" id="total-movements">--</div>
+            <small class="text-muted">Transactions</small>
+        </div>
+    </div>
+</div>
+
+<!-- Inventory Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">All Products Inventory</h5>
+                <input type="text" class="form-control form-control-sm" id="search-box" 
+                       placeholder="Search SKU or name..." style="width: 250px;">
+            </div>
+            <div class="card-body">
+                <div id="inventory-table">
+                    <div class="text-center text-muted">
+                        <i class="fas fa-spinner fa-spin me-2"></i>Loading inventory...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function formatCurrency(value) {
+        return Math.round(value).toLocaleString();
+    }
+
+    function loadInventory() {
+        fetch('/api/v1/inventory/all')
+            .then(r => r.json())
+            .then(data => {
+                const items = data.data || [];
+                let totalValue = 0;
+                let lowStockCount = 0;
+
+                let html = '<div class="table-responsive"><table class="table table-hover">' +
+                    '<thead><tr><th>SKU</th><th>Product Name</th><th>Current Stock</th><th>Reorder Level</th><th>Status</th><th>Stock Value</th><th>Actions</th></tr></thead><tbody>';
+
+                items.forEach(item => {
+                    totalValue += item.total_value_tzs;
+                    
+                    let statusBadge = '';
+                    if (item.status === 'Low Stock') {
+                        statusBadge = '<span class="badge bg-danger">⚠ LOW STOCK</span>';
+                        lowStockCount++;
+                    } else if (item.status === 'Medium Stock') {
+                        statusBadge = '<span class="badge bg-warning">⚡ MEDIUM</span>';
+                    } else {
+                        statusBadge = '<span class="badge bg-success">✓ GOOD</span>';
+                    }
+
+                    html += `<tr>
+                        <td><strong>${item.sku}</strong></td>
+                        <td>${item.product_name}</td>
+                        <td><h6 class="mb-0">${item.current_stock}</h6></td>
+                        <td>${item.reorder_level}</td>
+                        <td>${statusBadge}</td>
+                        <td>TZS ${formatCurrency(item.total_value_tzs)}</td>
+                        <td>
+                            <a href="/inventory/history/${item.sku}" class="btn btn-sm btn-outline-primary">History</a>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="quickAdjust('${item.sku}')">Adjust</button>
+                        </td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table></div>';
+                document.getElementById('inventory-table').innerHTML = html;
+                document.getElementById('total-skus').textContent = items.length;
+                document.getElementById('low-stock-count').textContent = lowStockCount;
+                document.getElementById('total-value').textContent = 'TZS ' + formatCurrency(totalValue);
+                document.getElementById('total-movements').textContent = '...';
+
+                // Search functionality
+                document.getElementById('search-box').addEventListener('keyup', function(e) {
+                    const query = e.target.value.toLowerCase();
+                    document.querySelectorAll('tbody tr').forEach(row => {
+                        const text = row.textContent.toLowerCase();
+                        row.style.display = text.includes(query) ? '' : 'none';
+                    });
+                });
+            });
+    }
+
+    function quickAdjust(sku) {
+        window.location.href = `/inventory/adjust?sku=${sku}`;
+    }
+
+    loadInventory();
+</script>
+{% endblock %}

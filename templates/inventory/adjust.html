@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %}Adjust Stock - Smart Retail System{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+    <div>
+        <a href="{{ url_for('inventory_overview') }}" class="btn btn-sm btn-outline-secondary mb-2">
+            <i class="fas fa-arrow-left me-1"></i>Back to Inventory
+        </a>
+        <h1 class="page-title">
+            <i class="fas fa-tools me-2"></i>Adjust Stock
+        </h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">Manual Stock Adjustment</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">Use this to correct inventory for damaged items, losses, or recount corrections.</p>
+
+                <form id="adjust-form">
+                    <!-- Product Selection -->
+                    <div class="mb-3">
+                        <label for="sku" class="form-label">Product <span class="text-danger">*</span></label>
+                        <select class="form-control" id="sku" name="sku" required>
+                            <option value="">-- Select Product --</option>
+                        </select>
+                        <div id="product-info" class="mt-2 p-2 bg-light rounded d-none">
+                            <small>
+                                <strong>Current Stock:</strong> <span id="current-stock">0</span> units |
+                                <strong>Reorder Level:</strong> <span id="reorder-level">0</span>
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Adjustment Type -->
+                    <div class="mb-3">
+                        <label for="reason" class="form-label">Adjustment Reason <span class="text-danger">*</span></label>
+                        <select class="form-control" id="reason" name="reason" required>
+                            <option value="">-- Select Reason --</option>
+                            <option value="DAMAGE">Damaged Items</option>
+                            <option value="LOSS">Loss/Theft</option>
+                            <option value="RECOUNT">Recount Correction</option>
+                            <option value="EXPIRY">Expired Products</option>
+                            <option value="OTHER">Other</option>
+                        </select>
+                    </div>
+
+                    <!-- Quantity -->
+                    <div class="mb-3">
+                        <label for="quantity" class="form-label">Quantity to Adjust <span class="text-danger">*</span></label>
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <select id="adjustment-sign" style="border: none; background: none;">
+                                            <option value="+">+ (Add Stock)</option>
+                                            <option value="-">- (Remove Stock)</option>
+                                        </select>
+                                    </span>
+                                    <input type="number" class="form-control" id="quantity" name="quantity" 
+                                           min="1" required placeholder="e.g., 5">
+                                    <span class="input-group-text">units</span>
+                                </div>
+                                <small class="text-muted d-block mt-2">
+                                    Choose + to add stock (return, recount surplus) or - to remove (damage, loss).
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Detailed Explanation</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="3" 
+                                  placeholder="Describe what happened and why..."></textarea>
+                    </div>
+
+                    <!-- User -->
+                    <div class="mb-3">
+                        <label for="created_by" class="form-label">Adjusted By</label>
+                        <input type="text" class="form-control" id="created_by" name="created_by" 
+                               placeholder="Your name">
+                    </div>
+
+                    <!-- Submit -->
+                    <button type="submit" class="btn btn-warning btn-lg w-100">
+                        <i class="fas fa-check me-2"></i>Apply Adjustment
+                    </button>
+                </form>
+
+                <!-- Success Alert -->
+                <div id="success-alert" class="alert alert-success mt-3 d-none">
+                    <i class="fas fa-check-circle me-2"></i>
+                    <strong>Success!</strong> <span id="success-message"></span>
+                </div>
+
+                <!-- Error Alert -->
+                <div id="error-alert" class="alert alert-danger mt-3 d-none">
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    <strong>Error!</strong> <span id="error-message"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Side Panel -->
+    <div class="col-lg-4">
+        <div class="card bg-light">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-question-circle me-2"></i>When to Adjust
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <h6 class="text-danger">🔴 Remove Stock (-)</h6>
+                    <ul class="small text-muted">
+                        <li>Damaged items found</li>
+                        <li>Stock loss/theft</li>
+                        <li>Expired products</li>
+                        <li>Recount shortage</li>
+                    </ul>
+                </div>
+
+                <div class="mb-3">
+                    <h6 class="text-success">🟢 Add Stock (+)</h6>
+                    <ul class="small text-muted">
+                        <li>Customer return</li>
+                        <li>Recount surplus</li>
+                        <li>Found items</li>
+                    </ul>
+                </div>
+
+                <div class="alert alert-danger mt-4">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Important:</strong> Adjustments create an audit trail. 
+                    Always provide a reason and explanation for compliance.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Load products
+    function loadProducts() {
+        fetch('/api/v1/products?limit=500')
+            .then(r => r.json())
+            .then(data => {
+                const select = document.getElementById('sku');
+                const urlParams = new URLSearchParams(window.location.search);
+                const selectedSku = urlParams.get('sku');
+
+                data.data.forEach(product => {
+                    const option = document.createElement('option');
+                    option.value = product.sku;
+                    option.textContent = `${product.sku} - ${product.name}`;
+                    if (selectedSku && product.sku === selectedSku) {
+                        option.selected = true;
+                    }
+                    select.appendChild(option);
+                });
+
+                if (selectedSku) {
+                    select.dispatchEvent(new Event('change'));
+                }
+            });
+    }
+
+    // Show product info when selected
+    document.getElementById('sku').addEventListener('change', function() {
+        const sku = this.value;
+        if (sku) {
+            fetch(`/api/v1/inventory/stock/${sku}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        const info = data.data;
+                        document.getElementById('current-stock').textContent = info.current_stock;
+                        document.getElementById('reorder-level').textContent = info.reorder_level;
+                        document.getElementById('product-info').classList.remove('d-none');
+                    }
+                });
+        }
+    });
+
+    // Submit form
+    document.getElementById('adjust-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const sign = document.getElementById('adjustment-sign').value;
+        const qty = parseInt(document.getElementById('quantity').value);
+        const finalQuantity = sign === '+' ? qty : -qty;
+
+        const data = {
+            sku: document.getElementById('sku').value,
+            quantity: finalQuantity,
+            reason: document.getElementById('reason').value,
+            notes: document.getElementById('notes').value,
+            created_by: document.getElementById('created_by').value
+        };
+
+        fetch('/api/v1/inventory/adjust', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'success') {
+                document.getElementById('success-message').textContent = data.message;
+                document.getElementById('success-alert').classList.remove('d-none');
+                document.getElementById('error-alert').classList.add('d-none');
+                document.getElementById('adjust-form').reset();
+                
+                setTimeout(() => {
+                    window.location.href = '/inventory/overview';
+                }, 1500);
+            } else {
+                document.getElementById('error-message').textContent = data.message;
+                document.getElementById('error-alert').classList.remove('d-none');
+                document.getElementById('success-alert').classList.add('d-none');
+            }
+        });
+    });
+
+    loadProducts();
+</script>
+{% endblock %}

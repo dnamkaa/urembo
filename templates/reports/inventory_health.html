@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory Health Report - Smart Retail System{% endblock %}
+
+{% block extra_css %}
+<style>
+    .report-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+    }
+    
+    .inventory-value-card {
+        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+        border: 2px solid #86efac;
+        border-radius: 8px;
+        padding: 2rem;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    
+    .inventory-value-card h3 {
+        font-size: 0.9rem;
+        color: #166534;
+        font-weight: 600;
+        text-transform: uppercase;
+        margin-bottom: 0.5rem;
+    }
+    
+    .inventory-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #16a34a;
+    }
+    
+    .report-section {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+        margin-bottom: 2rem;
+    }
+    
+    .section-title {
+        font-size: 1.2rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        color: #1f2937;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .section-subtitle {
+        font-size: 0.85rem;
+        color: #94a3b8;
+        margin-bottom: 1.5rem;
+    }
+    
+    .badge {
+        display: inline-block;
+        background: #fee2e2;
+        color: #991b1b;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 0.85rem;
+    }
+    
+    .badge.warning {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    
+    .badge.success {
+        background: #dcfce7;
+        color: #166534;
+    }
+    
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    
+    .data-table th {
+        background: #f8fafc;
+        padding: 1rem;
+        text-align: left;
+        font-weight: 600;
+        color: #64748b;
+        border-bottom: 2px solid #e2e8f0;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+    }
+    
+    .data-table td {
+        padding: 1rem;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    
+    .data-table tr:hover {
+        background: #f8fafc;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 2rem;
+        color: #94a3b8;
+    }
+    
+    .status-bad {
+        color: #dc2626;
+        font-weight: 700;
+    }
+    
+    .status-warning {
+        color: #ea580c;
+        font-weight: 700;
+    }
+    
+    .loading {
+        text-align: center;
+        padding: 2rem;
+        color: #94a3b8;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="report-header">
+        <h1 class="page-title">
+            <i class="fas fa-cube me-2"></i>Inventory Health Report
+        </h1>
+        <button class="btn btn-primary" onclick="refreshReport()">
+            <i class="fas fa-sync-alt me-2"></i>Refresh
+        </button>
+    </div>
+</div>
+
+<!-- Inventory Value -->
+<div id="inventory-card-container"></div>
+
+<!-- Reports -->
+<div id="report-content" class="loading">
+    <i class="fas fa-spinner fa-spin me-2"></i> Loading inventory health report...
+</div>
+
+<script>
+    function formatTZS(amount) {
+        return new Intl.NumberFormat('en-TZ').format(amount) + ' TZS';
+    }
+    
+    function renderReport(data) {
+        const lowStock = data.low_stock;
+        const outOfStock = data.out_of_stock;
+        const inventoryValue = data.inventory_value_estimate_tzs;
+        
+        // Inventory Value Card
+        let cardHtml = `
+            <div class="inventory-value-card">
+                <h3>Estimated Inventory Value</h3>
+                <div class="inventory-value">${formatTZS(inventoryValue)}</div>
+                <p style="margin-top: 0.5rem; color: #16a34a; font-size: 0.9rem;">
+                    Based on cost price × current stock
+                </p>
+            </div>
+        `;
+        
+        document.getElementById('inventory-card-container').innerHTML = cardHtml;
+        
+        let html = '';
+        
+        // Out of Stock
+        html += `
+            <div class="report-section">
+                <div class="section-title">
+                    <i class="fas fa-exclamation-circle" style="color: #dc2626;"></i>
+                    Out of Stock Items
+                    <span class="badge">${outOfStock.count}</span>
+                </div>
+        `;
+        
+        if (outOfStock.count === 0) {
+            html += `<div class="empty-state">✅ All items have inventory!</div>`;
+        } else {
+            html += `
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>SKU</th>
+                            <th>Product Name</th>
+                            <th>Category</th>
+                            <th style="text-align: right;">Reorder Level</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            for (const item of outOfStock.items) {
+                html += `
+                    <tr>
+                        <td><strong>${item.sku}</strong></td>
+                        <td>${item.name}</td>
+                        <td>${item.category}</td>
+                        <td style="text-align: right;">${item.reorder_level} units</td>
+                    </tr>
+                `;
+            }
+            
+            html += `
+                    </tbody>
+                </table>
+            `;
+        }
+        
+        html += `</div>`;
+        
+        // Low Stock
+        html += `
+            <div class="report-section">
+                <div class="section-title">
+                    <i class="fas fa-exclamation-triangle" style="color: #ea580c;"></i>
+                    Low Stock Items
+                    <span class="badge warning">${lowStock.count}</span>
+                </div>
+        `;
+        
+        if (lowStock.count === 0) {
+            html += `<div class="empty-state">✅ All items have healthy stock levels!</div>`;
+        } else {
+            html += `
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>SKU</th>
+                            <th>Product Name</th>
+                            <th>Category</th>
+                            <th style="text-align: right;">Current Stock</th>
+                            <th style="text-align: right;">Reorder Level</th>
+                            <th style="text-align: right;">To Reorder</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            for (const item of lowStock.items) {
+                html += `
+                    <tr>
+                        <td><strong>${item.sku}</strong></td>
+                        <td>${item.name}</td>
+                        <td>${item.category}</td>
+                        <td style="text-align: right;" class="status-warning">${item.current_stock} units</td>
+                        <td style="text-align: right;">${item.reorder_level} units</td>
+                        <td style="text-align: right; font-weight: 700; color: #ea580c;">${item.units_to_reorder} units</td>
+                    </tr>
+                `;
+            }
+            
+            html += `
+                    </tbody>
+                </table>
+            `;
+        }
+        
+        html += `</div>`;
+        
+        document.getElementById('report-content').innerHTML = html;
+    }
+    
+    function refreshReport() {
+        // Get button if called from click event
+        let btn = null;
+        if (event && event.target) {
+            btn = event.target.closest('button');
+        }
+        
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Refreshing...';
+        }
+        
+        document.getElementById('report-content').innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin me-2"></i> Loading...</div>';
+        
+        fetch('/api/reports/inventory-health')
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    renderReport(data);
+                } else {
+                    document.getElementById('report-content').innerHTML = '<div class="loading">Error: ' + data.message + '</div>';
+                }
+            })
+            .catch(err => {
+                document.getElementById('report-content').innerHTML = '<div class="loading">Network error</div>';
+            })
+            .finally(() => {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Refresh';
+                }
+            });
+    }
+    
+    // Load inventory report on page load
+    document.addEventListener('DOMContentLoaded', refreshReport);
+</script>
+{% endblock %}
