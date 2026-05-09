@@ -3,8 +3,10 @@ Smart Retail System - Products Module
 Tanzania POS & Inventory Management
 """
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, send_file
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, send_file, session
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
+from functools import wraps
 from datetime import datetime
 import os
 import json
@@ -33,6 +35,46 @@ db = SQLAlchemy(app)
 
 
 # ==================== DATABASE MODELS ====================
+
+class User(db.Model):
+    """
+    User Model - Authentication and role-based access control
+    
+    Roles:
+    - ADMIN: Full access to all modules
+    - SALESMAN: Access to POS terminal, products (view only), and reports
+    """
+    __tablename__ = 'users'
+    
+    user_id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    full_name = db.Column(db.String(255), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    role = db.Column(db.String(20), nullable=False, default='SALESMAN')  # ADMIN or SALESMAN
+    is_active = db.Column(db.Boolean, default=True, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def set_password(self, password):
+        """Hash and set password"""
+        self.password_hash = generate_password_hash(password)
+    
+    def check_password(self, password):
+        """Check if password matches hash"""
+        return check_password_hash(self.password_hash, password)
+    
+    def to_dict(self):
+        """Convert user to dictionary"""
+        return {
+            'user_id': self.user_id,
+            'username': self.username,
+            'full_name': self.full_name,
+            'role': self.role,
+            'is_active': self.is_active
+        }
+    
+    def __repr__(self):
+        return f'<User {self.username}: {self.role}>'
+
 
 class Product(db.Model):
     """
@@ -234,6 +276,72 @@ class SaleItem(db.Model):
 
 
 # ==================== UTILITY FUNCTIONS ====================
+
+def login_required(f):
+    """Decorator to check if user is logged in"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please log in first', 'error')
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def roles_required(*allowed_roles):
+    """Decorator to check if user has one of the allowed roles"""
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if 'user_id' not in session:
+                flash('Please log in first', 'error')
+                return redirect(url_for('login'))
+            
+            user = User.query.get(session['user_id'])
+            if not user or user.role not in allowed_roles:
+                flash('You do not have permission to access this page', 'error')
+                return redirect(url_for('dashboard'))
+            
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
+def role_required(role):
+    """Decorator to check user role"""
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if 'user_id' not in session:
+                flash('Please log in first', 'error')
+                return redirect(url_for('login'))
+            
+            user = User.query.get(session['user_id'])
+            if not user or user.role != role:
+                flash('You do not have permission to access this page', 'error')
+                return redirect(url_for('dashboard'))
+            
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
+def admin_required(f):
+    """Decorator to check if user is admin"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please log in first', 'error')
+            return redirect(url_for('login'))
+        
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'ADMIN':
+            flash('Admin access required', 'error')
+            return redirect(url_for('dashboard'))
+        
+        return f(*args, **kwargs)
+    return decorated_function
+
 
 def generate_sku():
     """
@@ -609,9 +717,31 @@ def void_sale(sale_id, reason=None, user=None):
 
 
 def init_db():
-    """Initialize database with schema"""
+    """Initialize database with schema and sample users"""
     with app.app_context():
         db.create_all()
+        
+        # Create sample users if they don't exist
+        if User.query.count() == 0:
+            admin_user = User(
+                username='admin',
+                full_name='Administrator',
+                role='ADMIN',
+                is_active=True
+            )
+            admin_user.set_password('admin123')
+            
+            salesman_user = User(
+                username='salesman1',
+                full_name='John Salesman',
+                role='SALESMAN',
+                is_active=True
+            )
+            salesman_user.set_password('pass123')
+            
+            db.session.add(admin_user)
+            db.session.add(salesman_user)
+            db.session.commit()
 
 
 
@@ -1545,29 +1675,76 @@ def api_pos_void_sale(sale_id):
     }), 200
 
 
-# ==================== WEB UI ROUTES ====================
+# ==================== AUTHENTICATION ROUTES ====================
 
-@app.route('/')
-def index():
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """User login"""
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        
+        user = User.query.filter_by(username=username).first()
+        
+        if user and user.check_password(password) and user.is_active:
+            session['user_id'] = user.user_id
+            session['username'] = user.username
+            session['full_name'] = user.full_name
+            session['role'] = user.role
+            flash(f'Welcome, {user.full_name}!', 'success')
+            return redirect(url_for('dashboard'))
+        else:
+            flash('Invalid username or password', 'error')
+    
+    return render_template('login.html')
+
+
+@app.route('/logout')
+def logout():
+    """User logout"""
+    session.clear()
+    flash('You have been logged out', 'success')
+    return redirect(url_for('login'))
+
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
     """Dashboard home page"""
+    user = User.query.get(session['user_id'])
+    
     total_products = Product.query.filter_by(is_active=True).count()
     categories = db.session.query(Product.category).distinct().filter_by(
         is_active=True
     ).count()
     
     return render_template('index.html', 
+                         user=user,
                          total_products=total_products,
                          total_categories=categories)
 
 
+# ==================== WEB UI ROUTES ====================
+
+@app.route('/')
+def index():
+    """Redirect to dashboard if logged in, otherwise login"""
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('login'))
+
+
 @app.route('/products')
+@admin_required
 def products_list():
     """Products management page"""
+    user = User.query.get(session['user_id'])
     products = Product.query.filter_by(is_active=True).all()
-    return render_template('products/list.html', products=products)
+    return render_template('products/list.html', user=user, products=products)
 
 
 @app.route('/products/new', methods=['GET', 'POST'])
+@admin_required
 def create_product():
     """Create new product"""
     if request.method == 'POST':
@@ -1826,22 +2003,28 @@ def inventory_history(sku=None):
 # ==================== POS SALES WEB ROUTES ====================
 
 @app.route('/pos/terminal')
+@roles_required('ADMIN', 'SALESMAN')
 def pos_terminal():
     """POS cashier terminal - main sales interface"""
-    return render_template('pos/terminal.html')
+    user = User.query.get(session['user_id'])
+    return render_template('pos/terminal.html', user=user)
 
 
 @app.route('/pos/receipt/<int:sale_id>')
+@login_required
 def pos_receipt(sale_id):
     """Receipt view page for printing"""
+    user = User.query.get(session['user_id'])
     sale = Sale.query.get_or_404(sale_id)
-    return render_template('pos/receipt.html', sale=sale)
+    return render_template('pos/receipt.html', user=user, sale=sale)
 
 
 @app.route('/pos/sales')
+@login_required
 def pos_sales_history():
     """Sales history for management review"""
-    return render_template('pos/sales_history.html')
+    user = User.query.get(session['user_id'])
+    return render_template('pos/sales_history.html', user=user)
 
 
 # ==================== ERROR HANDLERS ====================
@@ -2116,27 +2299,35 @@ def api_reports_inventory_health():
 # ==================== REPORTS WEB ROUTES ====================
 
 @app.route('/reports/dashboard')
+@login_required
 def reports_dashboard():
     """Dashboard page with KPI cards"""
-    return render_template('reports/dashboard.html')
+    user = User.query.get(session['user_id'])
+    return render_template('reports/dashboard.html', user=user)
 
 
 @app.route('/reports/sales')
+@login_required
 def reports_sales():
     """Sales summary report page"""
-    return render_template('reports/sales.html')
+    user = User.query.get(session['user_id'])
+    return render_template('reports/sales.html', user=user)
 
 
 @app.route('/reports/top-products')
+@login_required
 def reports_top_products():
     """Top products report page"""
-    return render_template('reports/top_products.html')
+    user = User.query.get(session['user_id'])
+    return render_template('reports/top_products.html', user=user)
 
 
 @app.route('/reports/inventory-health')
+@login_required
 def reports_inventory_health():
     """Inventory health report page"""
-    return render_template('reports/inventory_health.html')
+    user = User.query.get(session['user_id'])
+    return render_template('reports/inventory_health.html', user=user)
 
 
 @app.errorhandler(404)

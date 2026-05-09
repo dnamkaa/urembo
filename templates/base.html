@@ -264,17 +264,20 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/">Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/products">Products</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/api/v1/stats" target="_blank">
-                            <i class="fas fa-chart-bar me-1"></i>API Docs
-                        </a>
-                    </li>
+                    {% if user %}
+                        <li class="nav-item">
+                            <span class="nav-link" style="cursor: default;">
+                                <i class="fas fa-user-circle me-2"></i>
+                                <strong>{{ user.full_name }}</strong>
+                                <small class="ms-1" style="font-size: 0.8rem; opacity: 0.8;">({{ user.role }})</small>
+                            </span>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('logout') }}">
+                                <i class="fas fa-sign-out-alt me-1"></i>Logout
+                            </a>
+                        </li>
+                    {% endif %}
                 </ul>
             </div>
         </div>
@@ -304,36 +307,46 @@
             <div class="col-md-3 col-lg-2">
                 <div class="sidebar">
                     <nav class="nav flex-column">
-                        <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/">
+                        <a class="nav-link {% if request.path == '/dashboard' or request.path == '/' %}active{% endif %}" href="/dashboard">
                             <i class="fas fa-home me-2"></i>Dashboard
                         </a>
-                        <a class="nav-link {% if request.path.startswith('/products') %}active{% endif %}" href="/products">
-                            <i class="fas fa-box me-2"></i>Products
-                        </a>
-                        <a class="nav-link" href="/products/new">
-                            <i class="fas fa-plus-circle me-2"></i>Add Product
-                        </a>
-                        <hr class="my-2" style="border-color: #e2e8f0;">
-                        <a class="nav-link {% if request.path.startswith('/inventory') %}active{% endif %}" href="/inventory/overview">
-                            <i class="fas fa-warehouse me-2"></i>Inventory
-                        </a>
-                        <a class="nav-link" href="/inventory/stock-in" style="margin-left: 1.5rem; font-size: 0.9rem;">
-                            <i class="fas fa-arrow-down me-2"></i>Stock In
-                        </a>
-                        <a class="nav-link" href="/inventory/adjust" style="margin-left: 1.5rem; font-size: 0.9rem;">
-                            <i class="fas fa-tools me-2"></i>Adjust
-                        </a>
-                        <a class="nav-link" href="/inventory/history" style="margin-left: 1.5rem; font-size: 0.9rem;">
-                            <i class="fas fa-history me-2"></i>History
-                        </a>
-                        <hr class="my-2" style="border-color: #e2e8f0;">
+                        
+                        {% if user and user.role == 'ADMIN' %}
+                            <!-- Admin-only: Product Management -->
+                            <a class="nav-link {% if request.path.startswith('/products') %}active{% endif %}" href="/products">
+                                <i class="fas fa-box me-2"></i>Products
+                            </a>
+                            <a class="nav-link" href="/products/new">
+                                <i class="fas fa-plus-circle me-2"></i>Add Product
+                            </a>
+                            <hr class="my-2" style="border-color: #e2e8f0;">
+                            
+                            <!-- Admin-only: Inventory Management -->
+                            <a class="nav-link {% if request.path.startswith('/inventory') %}active{% endif %}" href="/inventory/overview">
+                                <i class="fas fa-warehouse me-2"></i>Inventory
+                            </a>
+                            <a class="nav-link" href="/inventory/stock-in" style="margin-left: 1.5rem; font-size: 0.9rem;">
+                                <i class="fas fa-arrow-down me-2"></i>Stock In
+                            </a>
+                            <a class="nav-link" href="/inventory/adjust" style="margin-left: 1.5rem; font-size: 0.9rem;">
+                                <i class="fas fa-tools me-2"></i>Adjust
+                            </a>
+                            <a class="nav-link" href="/inventory/history" style="margin-left: 1.5rem; font-size: 0.9rem;">
+                                <i class="fas fa-history me-2"></i>History
+                            </a>
+                            <hr class="my-2" style="border-color: #e2e8f0;">
+                        {% endif %}
+                        
+                        <!-- Available for all: POS Terminal -->
                         <a class="nav-link {% if request.path.startswith('/pos') %}active{% endif %}" href="/pos/terminal">
                             <i class="fas fa-cash-register me-2"></i>POS Terminal
                         </a>
                         <a class="nav-link" href="/pos/sales" style="margin-left: 1.5rem; font-size: 0.9rem;">
-                            <i class="fas fa-receipt me-2"></i>Sales
+                            <i class="fas fa-receipt me-2"></i>Sales History
                         </a>
                         <hr class="my-2" style="border-color: #e2e8f0;">
+                        
+                        <!-- Available for all: Reports -->
                         <a class="nav-link {% if request.path.startswith('/reports') %}active{% endif %}" href="/reports/dashboard">
                             <i class="fas fa-chart-line me-2"></i>Reports
                         </a>
@@ -349,13 +362,16 @@
                         <a class="nav-link" href="/reports/inventory-health" style="margin-left: 1.5rem; font-size: 0.9rem;">
                             <i class="fas fa-cube me-2"></i>Inventory Health
                         </a>
-                        <hr class="my-2" style="border-color: #e2e8f0;">
-                        <a class="nav-link" href="/api/v1/products" target="_blank">
-                            <i class="fas fa-code me-2"></i>API
-                        </a>
-                        <a class="nav-link" href="/api/v1/products/stats" target="_blank">
-                            <i class="fas fa-chart-line me-2"></i>Statistics
-                        </a>
+                        
+                        {% if user and user.role == 'ADMIN' %}
+                            <hr class="my-2" style="border-color: #e2e8f0;">
+                            <a class="nav-link" href="/api/v1/products" target="_blank">
+                                <i class="fas fa-code me-2"></i>API
+                            </a>
+                            <a class="nav-link" href="/api/v1/products/stats" target="_blank">
+                                <i class="fas fa-chart-line me-2"></i>Statistics
+                            </a>
+                        {% endif %}
                     </nav>
                 </div>
             </div>
