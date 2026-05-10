@@ -2363,6 +2363,29 @@ def ensure_db_ready():
     """Create tables (and seed demo data if empty) when app starts on Render."""
     with app.app_context():
         db.create_all()
+        
+        # Create sample users if they don't exist
+        if User.query.count() == 0:
+            admin_user = User(
+                username='admin',
+                full_name='Administrator',
+                role='ADMIN',
+                is_active=True
+            )
+            admin_user.set_password('admin123')
+            
+            salesman_user = User(
+                username='salesman1',
+                full_name='John Salesman',
+                role='SALESMAN',
+                is_active=True
+            )
+            salesman_user.set_password('pass123')
+            
+            db.session.add(admin_user)
+            db.session.add(salesman_user)
+            db.session.commit()
+        
         # Optional: seed demo data only if no products exist
         if Product.query.count() == 0:
             seed_sample_data()
