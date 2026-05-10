@@ -1707,6 +1707,41 @@ def logout():
     return redirect(url_for('login'))
 
 
+@app.route('/admin/reset-db', methods=['GET', 'POST'])
+@admin_required
+def reset_database():
+    """Reset database - keeps schema and users, clears all data"""
+    if request.method == 'GET':
+        # Show confirmation page
+        return render_template('admin/reset_db.html')
+    
+    if request.method == 'POST':
+        try:
+            # Confirm admin password
+            password = request.form.get('password', '')
+            user = User.query.get(session['user_id'])
+            
+            if not user.check_password(password):
+                flash('Incorrect password. Database not reset.', 'error')
+                return redirect(url_for('reset_database'))
+            
+            # Delete all data but keep schema and users
+            Sale.query.delete()
+            SaleItem.query.delete()
+            InventoryMovement.query.delete()
+            Product.query.delete()
+            
+            db.session.commit()
+            
+            flash('✓ Database reset successfully! All products, sales, and inventory cleared.', 'success')
+            return redirect(url_for('dashboard'))
+        
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error resetting database: {str(e)}', 'error')
+            return redirect(url_for('reset_database'))
+
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
