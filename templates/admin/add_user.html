@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+
+{% block title %}Add New User - Admin{% endblock %}
+
+{% block extra_css %}
+<style>
+    .add-user-container {
+        max-width: 600px;
+        margin: 0 auto;
+    }
+    
+    .form-card {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 2rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+    
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: #374151;
+    }
+    
+    .form-group small {
+        display: block;
+        color: #6b7280;
+        font-size: 0.85rem;
+        margin-top: 0.35rem;
+    }
+    
+    .form-group input,
+    .form-group select {
+        width: 100%;
+        padding: 0.75rem;
+        border: 2px solid #e2e8f0;
+        border-radius: 6px;
+        font-size: 1rem;
+        transition: all 0.3s;
+    }
+    
+    .form-group input:focus,
+    .form-group select:focus {
+        outline: none;
+        border-color: #2563eb;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+    
+    .button-group {
+        display: flex;
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+    
+    .btn-cancel {
+        flex: 1;
+        padding: 0.75rem;
+        background: #e5e7eb;
+        border: none;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        text-decoration: none;
+        text-align: center;
+    }
+    
+    .btn-cancel:hover {
+        background: #d1d5db;
+    }
+    
+    .btn-create {
+        flex: 1;
+        padding: 0.75rem;
+        background: #2563eb;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    
+    .btn-create:hover {
+        background: #1d4ed8;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+    
+    .info-box {
+        background: #eff6ff;
+        border-left: 4px solid #2563eb;
+        padding: 1rem;
+        border-radius: 4px;
+        margin-bottom: 1.5rem;
+    }
+    
+    .info-box i {
+        color: #2563eb;
+        margin-right: 0.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="add-user-container">
+    <div class="page-header">
+        <h1 class="page-title">
+            <i class="fas fa-user-plus me-2"></i>Add New User
+        </h1>
+    </div>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <div class="info-box">
+        <i class="fas fa-info-circle"></i>
+        <strong>Quick Tip:</strong> Users can log in immediately after creation. Send them their username and temporary password.
+    </div>
+    
+    <div class="form-card">
+        <form method="POST" action="{{ url_for('add_user') }}">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" placeholder="e.g., john_sales" required autofocus>
+                <small>Unique identifier for login. Use lowercase letters, numbers, and underscores.</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="full_name">Full Name</label>
+                <input type="text" id="full_name" name="full_name" placeholder="e.g., John Mwangi" required>
+                <small>Display name that appears in the system</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" placeholder="Minimum 6 characters" required minlength="6">
+                <small>Must be at least 6 characters long</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="role">Role</label>
+                <select id="role" name="role" required>
+                    <option value="SALESMAN">Salesman (POS Access Only)</option>
+                    <option value="ADMIN">Admin (Full Access)</option>
+                </select>
+                <small>
+                    <strong>Salesman:</strong> Can use POS & view reports<br>
+                    <strong>Admin:</strong> Can manage products, inventory, users
+                </small>
+            </div>
+            
+            <div class="button-group">
+                <a href="{{ url_for('manage_users') }}" class="btn-cancel">
+                    Cancel
+                </a>
+                <button type="submit" class="btn-create">
+                    <i class="fas fa-check me-2"></i>Create User
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+{% endblock %}

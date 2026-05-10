@@ -1742,6 +1742,87 @@ def reset_database():
             return redirect(url_for('reset_database'))
 
 
+@app.route('/admin/users')
+@admin_required
+def manage_users():
+    """Manage users - list all users"""
+    users = User.query.all()
+    return render_template('admin/users.html', users=users)
+
+
+@app.route('/admin/users/add', methods=['GET', 'POST'])
+@admin_required
+def add_user():
+    """Add new user"""
+    if request.method == 'POST':
+        try:
+            username = request.form.get('username', '').strip()
+            full_name = request.form.get('full_name', '').strip()
+            password = request.form.get('password', '').strip()
+            role = request.form.get('role', 'SALESMAN')
+            
+            # Validation
+            if not username or not full_name or not password:
+                flash('All fields are required', 'error')
+                return redirect(url_for('add_user'))
+            
+            if len(password) < 6:
+                flash('Password must be at least 6 characters', 'error')
+                return redirect(url_for('add_user'))
+            
+            # Check if username already exists
+            if User.query.filter_by(username=username).first():
+                flash(f'Username "{username}" already exists', 'error')
+                return redirect(url_for('add_user'))
+            
+            # Create new user
+            new_user = User(
+                username=username,
+                full_name=full_name,
+                role=role,
+                is_active=True
+            )
+            new_user.set_password(password)
+            
+            db.session.add(new_user)
+            db.session.commit()
+            
+            flash(f'✓ User "{full_name}" created successfully as {role}', 'success')
+            return redirect(url_for('manage_users'))
+        
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error creating user: {str(e)}', 'error')
+            return redirect(url_for('add_user'))
+    
+    return render_template('admin/add_user.html')
+
+
+@app.route('/admin/users/<int:user_id>/toggle', methods=['POST'])
+@admin_required
+def toggle_user(user_id):
+    """Disable/enable user"""
+    try:
+        user = User.query.get_or_404(user_id)
+        
+        # Prevent disabling current user
+        if user.user_id == session.get('user_id'):
+            flash('Cannot disable your own account', 'error')
+            return redirect(url_for('manage_users'))
+        
+        user.is_active = not user.is_active
+        db.session.commit()
+        
+        status = 'enabled' if user.is_active else 'disabled'
+        flash(f'✓ User "{user.full_name}" {status}', 'success')
+    
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+    
+    return redirect(url_for('manage_users'))
+
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
